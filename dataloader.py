@@ -38,9 +38,11 @@ def encode_large_file(sp_model, input_path, output_path, chunk_size=10000):
     print(f"✅ Saved {len(tokens_all)} tokens to {output_path}")
     
 class dataloaderlite:
-    def __init__(self, model_path):
+    def __init__(self, model_path,rank,num_process):
         self.batchsize = config.batchsize
         self.blocksize = config.blocksize
+        self.rank      = rank
+        self.num_process = num_process
         cache_path = "novel_tokens.pt"
         self.sp    = spm.SentencePieceProcessor(model_file = model_path)
         if os.path.exists(cache_path):
@@ -56,46 +58,20 @@ class dataloaderlite:
         print(split)
         self.test   = self.tokens[:split]
         self.validation = self.tokens[split:]
-        self.current_pos = {"train":0, "validation":0}
-    def get_stats(self,tokens):
-        out = {}
-        for s in zip(tokens,tokens[1:]):
-            out[s] = out.get(s,0) + 1
-        return out
-    def merge(self,text,pair, idx):
-        newtext = []
-        i = 0
-        while i < len(text):
-            if i < len(text) - 1 and text[i] == pair[0] and text[i+1] == pair[1]:
-                newtext.append(idx)
-                i +=2
-            else:
-                newtext.append(text[i])
-                i +=1
-        return newtext
-    def bp_encode(self,text):
-        tokens = self.encode(text)
-        while len(tokens) > 2:
-            out = self.get_stats(tokens)
-            pair = min(out,key =lambda p: self.merges.get(p,float("inf")))
-            if pair not in self.merges:
-                break
-            idx = self.merges[pair]
-            tokens = self.merge(tokens, pair, idx)
-        return tokens
+        self.current_pos = {"train":rank*self.batchsize*self.blocksize, "validation":rank*self.batchsize*self.blocksize}
 
-    def next_batch(self,mode = "train"):
+    def next_batch(self,device,mode = "train"):
         B,T = config.batchsize,config.blocksize
         if mode == "train":
             data = self.test
         elif mode == "validation":
             data = self.validation
-        if self.current_pos[mode] > len(data) -B*T-1:
-            self.current_pos[mode] = 0
+        if self.current_pos[mode] > len(data) -self.num_process*B*T-1:
+            self.current_pos[mode] = self.rank*self.batchsize*self.blocksize
         token = data[self.current_pos[mode]:self.current_pos[mode]+B*T+1]
         x = token[:-1].view(B,T)
         y = token[1:].view(B,T)
-        x,y = x.to(config.device),y.to(config.device)
-        self.current_pos[mode] += B*T
+        x,y = x.to(device),y.to(device)
+        self.current_pos[mode] += self.num_process*B*T
         return x,y
 
