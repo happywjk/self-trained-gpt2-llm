@@ -8,7 +8,7 @@ import config
 import sentencepiece as spm
 # %%
 from dataloader import dataloaderlite
-from attension.attension import LinearAttention, DeltaAttention
+from plug_in.attension import LinearAttention, DeltaAttention
 # %%
 def get_lr(step):
     if step < config.warmup_steps:
@@ -113,7 +113,7 @@ torch.set_float32_matmul_precision("high")
 
 from model import gpt
 
-model = gpt(config, attention_impl= DeltaAttention, device=device)
+model = gpt(config, device=device)
 model.to(device)
 model = torch.compile(model)
 if ddp:
@@ -149,7 +149,7 @@ for epoch in range(2):
         dt = (t1 -t0)*1000
         tps = (config.blocksize* config.batchsize*ddp_world_size)/(t1-t0)
         master_print(f"iteration: {step}, learning rate: {lr}, norm: {norm:.2f}  tps:{tps:.2f} tokens/second")
-        if step % 100 ==0:
+        if step % 5 ==0:
             out = eval_loss(model,device)
             master_print(f"train loss: {out["train"]}, validation loss: {out["validation"]}")
     

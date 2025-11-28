@@ -5,11 +5,10 @@ import config
 import torch.nn.functional as F
 from typing import Type
 
-from attension.attension import AttentionBase, DenseAttention
-from attension.block import Block
-from attension.ffn import DenseFF, FeedForwardBase
+from plug_in.attension import AttentionBase, DenseAttention
+from plug_in.block import Block
+from plug_in.ffn import DenseFF, FeedForwardBase
 
-print(config.__file__)
 
 class gpt(nn.Module):
     def __init__(

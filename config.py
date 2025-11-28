@@ -1,10 +1,10 @@
 ############### model parameter
 import torch
 batchsize = 16
-blocksize = 16
-hiddensize = 12
+blocksize = 1024
+hiddensize = 768
 vocabsize = 49152
-num_heads = 4
+num_heads = 12
 n_layers = 12
 device = "cuda" if torch.cuda.is_available() else "cpu"
 ################ training
