@@ -8,6 +8,7 @@ import config
 import sentencepiece as spm
 # %%
 from dataloader import dataloaderlite
+from attension.attension import LinearAttention, DeltaAttention
 # %%
 def get_lr(step):
     if step < config.warmup_steps:
@@ -112,7 +113,7 @@ torch.set_float32_matmul_precision("high")
 
 from model import gpt
 
-model = gpt(config, device)
+model = gpt(config, attention_impl= DeltaAttention, device=device)
 model.to(device)
 model = torch.compile(model)
 if ddp:
