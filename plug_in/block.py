@@ -2,8 +2,9 @@ from typing import Type
 
 import torch.nn as nn
 
-from attension.attension import AttentionBase
-from attension.ffn import DenseFF, FeedForwardBase
+# NOTE: keep imports relative so we always pick up the local implementations
+from plug_in.attension import AttentionBase
+from plug_in.ffn import DenseFF, FeedForwardBase
 
 
 class Block(nn.Module):
