@@ -9,6 +9,10 @@ import sentencepiece as spm
 # %%
 from dataloader import dataloaderlite
 from plug_in.attension import LinearAttention, DeltaAttention
+from torch.distributed.device_mesh import init_device_mesh
+from support.hook import register_tp_hooks
+from torch.distributed.tensor import Replicate
+from torch.distributed.tensor import _redistribute as dtensor_redistribute
 # %%
 def get_lr(step):
     if step < config.warmup_steps:
@@ -84,27 +88,43 @@ def configure_optimizers(self, weight_decay, learning_rate, device_type):
     return optimizer
 
 from torch.distributed import init_process_group, destroy_process_group
-from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import os
+
+def setup_distributed():
+    """Initialize DDP state from environment and return common metadata."""
+    ddp = int(os.environ.get("RANK", -1)) != -1
+    if ddp:
+        assert torch.cuda.is_available()
+        init_process_group(backend="nccl")
+        rank = int(os.environ["RANK"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        world_size = int(os.environ["WORLD_SIZE"])
+        device = f"cuda:{local_rank}"
+        torch.cuda.set_device(device)
+        master_process = rank == 0
+    else:
+        rank = 0
+        local_rank = 0
+        world_size = 1
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        master_process = True
+    return ddp, rank, local_rank, world_size, device, master_process
+
+def cleanup_distributed(ddp):
+    """Tear down DDP process group if it was initialized."""
+    if ddp and dist.is_initialized():
+        destroy_process_group()
+
+def build_device_mesh(device_type, world_size):
+    """Create a 1D device mesh spanning all ranks."""
+    mesh = init_device_mesh(device_type, (world_size,))
+    return mesh
 # rank environment value is being set automatically when you initial script using torchrun --nproc_per_node
-ddp = int(os.environ.get("RANK",-1)) != -1
-if ddp:
-    assert torch.cuda.is_available()
-    init_process_group(backend="nccl")
-    ddp_rank = int(os.environ["RANK"])
-    ddp_local_rank = int(os.environ["LOCAL_RANK"])
-    ddp_world_size = int(os.environ["WORLD_SIZE"])
-    device = f"cuda:{ddp_local_rank}"
-    torch.cuda.set_device(device)
-    master_process = ddp_rank == 0
-else:
-    #vanilla,non-DDP run
-    ddp_rank = 0
-    ddp_local_rank = 0
-    ddp_world_size =1
-    device = "cuda" if torch.cuda.is_available() else "cpu" 
-    master_process = True
+ddp, ddp_rank, ddp_local_rank, ddp_world_size, device, master_process = setup_distributed()
+device_mesh = build_device_mesh(torch.device(device).type, ddp_world_size)
+if master_process:
+    master_print(f"device mesh created: {device_mesh}")
 
 dataset = dataloaderlite(model_path = "tok_normal_novel_bpe.model",rank=ddp_local_rank, num_process=ddp_world_size)
 sp    = spm.SentencePieceProcessor(model_file = "tok_normal_novel_bpe.model")
@@ -113,15 +133,12 @@ torch.set_float32_matmul_precision("high")
 
 from model import gpt
 
-model = gpt(config, device=device)
+model = gpt(config, device=device, device_mesh=device_mesh)
 model.to(device)
-model = torch.compile(model)
-if ddp:
-    master_print(f"rank {ddp_rank} before DDP on {device}")
-    model = DDP(model,device_ids = [ddp_local_rank])
-    master_print(f"rank {ddp_rank} after DDP on {device}")
+# model = torch.compile(model)  关掉compile模式以进行debug
 master_print(model)
-raw_model = model.module if ddp else model
+raw_model = model
+register_tp_hooks(raw_model)
 optimizer = configure_optimizers(raw_model,weight_decay=0.1,learning_rate = config.learning_rate,device_type=device)
 master_print("finish model")
 grad_accum = large_batch(524288, ddp_world_size)
@@ -140,9 +157,11 @@ for epoch in range(2):
             # with torch.autocast(device_type = config.device, dtype = torch.bfloat16):
             logits, loss = model(x,y)
             loss = loss / grad_accum
-            if ddp:
-                model.require_backward_grad_sync = (i == grad_accum -1)
             loss.backward()
+        # 将 DTensor grad 先聚合为 Replicate，避免 foreach_norm 混合 Tensor/DTensor 报错
+        for p in model.parameters():
+            if p.grad is not None and hasattr(p.grad, "placements"):
+                p.grad = dtensor_redistribute(p.grad, device_mesh, [Replicate()])
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(),1.0)
         optimizer.step()
         t1 = time.time()
@@ -151,7 +170,7 @@ for epoch in range(2):
         master_print(f"iteration: {step}, learning rate: {lr}, norm: {norm:.2f}  tps:{tps:.2f} tokens/second")
         if step % 5 ==0:
             out = eval_loss(model,device)
-            master_print(f"train loss: {out["train"]}, validation loss: {out["validation"]}")
+            master_print(f"train loss: {out['train']}, validation loss: {out['validation']}")
     
         if step % 300 == 0 and master_process:
             out = gen(raw_model, "我坐在工程学院自习")
@@ -167,4 +186,5 @@ for epoch in range(2):
             master_print(f"✅ Model checkpoint saved to {save_path}")
         step = step + 1
 
+cleanup_distributed(ddp)
 # %%

@@ -13,11 +13,12 @@ class Block(nn.Module):
         config,
         attention_impl: Type[AttentionBase],
         ff_impl: Type[FeedForwardBase] = DenseFF,
+        device_mesh=None,
     ):
         super().__init__()
         self.attn = attention_impl(config)
         self.ln1 = nn.LayerNorm(config.hiddensize)
-        self.ff = ff_impl(config)
+        self.ff = ff_impl(config, device_mesh=device_mesh)
         self.ln2 = nn.LayerNorm(config.hiddensize)
         self.dropout = nn.Dropout(config.dropout)
 

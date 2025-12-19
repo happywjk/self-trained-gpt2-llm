@@ -5,6 +5,11 @@ import config
 import torch.nn.functional as F
 from typing import Type
 
+from torch.distributed.tensor.parallel import (
+    ColwiseParallel,
+    RowwiseParallel,
+    parallelize_module,
+)
 from plug_in.attension import AttentionBase, DenseAttention
 from plug_in.block import Block
 from plug_in.ffn import DenseFF, FeedForwardBase
@@ -17,11 +22,17 @@ class gpt(nn.Module):
         device,
         attention_impl: Type[AttentionBase] = DenseAttention,
         ff_impl: Type[FeedForwardBase] = DenseFF,
+        device_mesh=None,
     ):
         super().__init__()
         self.token_embedding = nn.Embedding(config.vocabsize,config.hiddensize)
         self.position_embedding = nn.Embedding(config.blocksize,config.hiddensize)
-        self.Block = nn.ModuleList([Block(config, attention_impl, ff_impl) for i in range(config.n_layers)])
+        self.Block = nn.ModuleList(
+            [
+                Block(config, attention_impl, ff_impl, device_mesh=device_mesh)
+                for i in range(config.n_layers)
+            ]
+        )
         self.ln    = nn.LayerNorm(config.hiddensize)
         self.out_proj = nn.Linear(config.hiddensize, config.vocabsize)
         self.token_embedding.weight = self.out_proj.weight
