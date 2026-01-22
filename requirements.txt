@@ -1,0 +1,5 @@
+# Python dependencies for this project
+# torch: CPU build (suitable for development; swap to CUDA variant if needed)
+torch==2.4.1
+numpy==2.4.1
+tqdm>=4.67.1

@@ -1,5 +1,4 @@
 # %%
-import jieba
 import config
 import pickle
 import os

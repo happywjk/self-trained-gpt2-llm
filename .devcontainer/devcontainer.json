@@ -1,0 +1,28 @@
+{
+  "name": "self-trained-gpt2-llm (PyTorch CUDA)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".devcontainer"
+  },
+  "runArgs": [
+    "--shm-size=16g"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "mhutchie.git-graph"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/bin/python",
+        "python.analysis.autoImportCompletions": true,
+        "python.testing.pytestEnabled": true
+      }
+    }
+  },
+  "remoteUser": "root",
+  "updateContentCommand": "pip install -U pip && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi",
+  "postCreateCommand": "python - <<'PY'\nimport torch, os\nprint('Torch version:', torch.__version__)\nprint('CUDA available:', torch.cuda.is_available())\nprint('CUDA device count:', torch.cuda.device_count())\nPY"
+}
