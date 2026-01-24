@@ -3,6 +3,29 @@ import os
 import tiktoken
 import torch
 
+def convert_to_utf8(input_path: str, output_path: str):
+    """Convert a text file with unknown/legacy encoding to UTF-8.
+    Tries common Chinese encodings before falling back.
+    """
+    candidates = ["utf-8", "utf-8-sig", "gb18030", "gbk", "big5", "cp936"]
+    data = None
+    with open(input_path, "rb") as f:
+        raw = f.read()
+    for enc in candidates:
+        try:
+            data = raw.decode(enc)
+            print(f"Decoded using: {enc}")
+            break
+        except Exception:
+            continue
+    if data is None:
+        # last resort: decode replacing errors
+        data = raw.decode("utf-8", errors="replace")
+        print("Decoded using: utf-8 (with replacement)")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(data)
+    print(f"✅ Written UTF-8 text to {output_path}")
+
 def preview_encoding(text: str, encoding_name: str = "gpt2"):
     enc = tiktoken.get_encoding(encoding_name)
     ids = enc.encode(text)
@@ -32,5 +55,7 @@ if __name__ == "__main__":
     sample = "我在图书馆，坐在我的女朋友旁边，使用我的电脑进行大模型相关的学习"
     preview_encoding(sample)
     # 如果需要，将语料编码为pt缓存：
-    # encode_corpus_to_pt("/root/happywjk/home/jw2777/zero_to_hero/final_gpt/novel/cnnovel125k_00_01.txt")
+    encode_corpus_to_pt("/workspaces/self-trained-gpt2-llm/device_mesh_tutorial_using_tiktoken/tang_utf8.txt")
+    # 将非UTF-8文本转换为UTF-8：
+    # convert_to_utf8("/workspaces/self-trained-gpt2-llm/device_mesh_tutorial_using_tiktoken/tang.txt", "/workspaces/self-trained-gpt2-llm/device_mesh_tutorial_using_tiktoken/tang_utf8.txt")
 # %%

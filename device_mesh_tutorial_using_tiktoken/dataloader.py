@@ -35,7 +35,7 @@ def encode_large_file(input_path, output_path, chunk_size=10000, encoding_name="
     print(f"✅ Saved {len(tokens_all)} tokens to {output_path}")
     
 class dataloaderlite:
-    def __init__(self, rank, num_process, input_path="/root/happywjk/home/jw2777/zero_to_hero/final_gpt/novel/cnnovel125k_00_01.txt", cache_path="novel_tokens.pt", encoding_name="gpt2"):
+    def __init__(self, rank, num_process, input_path="/workspaces/self-trained-gpt2-llm/device_mesh_tutorial_using_tiktoken/tang_utf8.txt", cache_path="novel_tokens.pt", encoding_name="gpt2"):
         self.batchsize = config.batchsize
         self.blocksize = config.blocksize
         self.rank      = rank

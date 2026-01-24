@@ -1,7 +1,7 @@
 ############### model parameter
 import torch
-batchsize = 16
-blocksize = 1024
+batchsize = 4
+blocksize = 128
 hiddensize = 768
 vocabsize = 50257
 num_heads = 12
